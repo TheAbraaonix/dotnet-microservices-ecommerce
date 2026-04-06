@@ -1,0 +1,109 @@
+{
+  "exchanges": [
+    {
+      "name": "ecommerce.events",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "ecommerce.dlx",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "pedidoservice.queue",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "ecommerce.dlx",
+        "x-dead-letter-routing-key": ""
+      }
+    },
+    {
+      "name": "estoqueservice.queue",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "ecommerce.dlx",
+        "x-dead-letter-routing-key": ""
+      }
+    },
+    {
+      "name": "pagamentosservice.queue",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "ecommerce.dlx",
+        "x-dead-letter-routing-key": ""
+      }
+    },
+    {
+      "name": "notificacaoservice.queue",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "ecommerce.dlx",
+        "x-dead-letter-routing-key": ""
+      }
+    },
+    {
+      "name": "workeremail.queue",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "ecommerce.dlx",
+        "x-dead-letter-routing-key": ""
+      }
+    },
+    {
+      "name": "ecommerce.dlq",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "ecommerce.events",
+      "destination": "pedidoservice.queue",
+      "routing_key": "pedido.*",
+      "arguments": {}
+    },
+    {
+      "source": "ecommerce.events",
+      "destination": "estoqueservice.queue",
+      "routing_key": "estoque.*",
+      "arguments": {}
+    },
+    {
+      "source": "ecommerce.events",
+      "destination": "pagamentosservice.queue",
+      "routing_key": "pagamento.*",
+      "arguments": {}
+    },
+    {
+      "source": "ecommerce.events",
+      "destination": "notificacaoservice.queue",
+      "routing_key": "#",
+      "arguments": {}
+    },
+    {
+      "source": "ecommerce.events",
+      "destination": "workeremail.queue",
+      "routing_key": "email.*",
+      "arguments": {}
+    },
+    {
+      "source": "ecommerce.dlx",
+      "destination": "ecommerce.dlq",
+      "routing_key": "",
+      "arguments": {}
+    }
+  ]
+}

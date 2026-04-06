@@ -1,0 +1,57 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.log
+*.nuget
+*.nupkg
+**/packages/*
+!**/packages/build/
+*.psess
+*.vsp
+*.vspx
+*.suo
+*.user
+.vs/
+.vscode/
+*.cache
+project.lock.json
+project.fragment.lock.json
+artifacts/
+!**/Properties/launchSettings.json
+
+# Angular / Node
+**/node_modules/
+**/dist/
+**/.angular/
+**/.schematics/
+**/coverage/
+**/.nx/
+angular.db
+
+# Docker
+*.pid
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test results
+**/TestResults/
+**/test-results/
+
+# Build artifacts
+publish/
+*.pubxml
+
+# OS
+Thumbs.db
+desktop.ini

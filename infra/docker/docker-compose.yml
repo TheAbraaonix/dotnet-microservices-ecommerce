@@ -1,0 +1,267 @@
+version: '3.8'
+
+name: ecommerce-microservices
+
+services:
+  # ──────────────────────────────────────────────
+  # DATABASES
+  # ──────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: ecommerce
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-postgres:/docker-entrypoint-initdb.d
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7
+    container_name: ecommerce-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ──────────────────────────────────────────────
+  # MESSAGE BROKERS
+  # ──────────────────────────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: ecommerce-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    networks:
+      - ecommerce-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: ecommerce-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: kafka-broker-api-versions --bootstrap-server localhost:9092
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ecommerce-kafka-ui
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8090:8080"
+    networks:
+      - ecommerce-network
+
+  # ──────────────────────────────────────────────
+  # APPLICATION SERVICES (uncomment when ready)
+  # ──────────────────────────────────────────────
+
+  # pedidoservice:
+  #   build:
+  #     context: ./src/services/PedidoService
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-pedidoservice
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=pedidos;Username=admin;Password=admin123
+  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #   ports:
+  #     - "5001:8080"
+  #   networks:
+  #     - ecommerce-network
+
+  # estoqueservice:
+  #   build:
+  #     context: ./src/services/EstoqueService
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-estoqueservice
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=estoque;Username=admin;Password=admin123
+  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #   ports:
+  #     - "5002:8080"
+  #   networks:
+  #     - ecommerce-network
+
+  # pagamentosservice:
+  #   build:
+  #     context: ./src/services/PagamentoService
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-pagamentosservice
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=pagamentos;Username=admin;Password=admin123
+  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #   ports:
+  #     - "5003:8080"
+  #   networks:
+  #     - ecommerce-network
+
+  # notificacaoservice:
+  #   build:
+  #     context: ./src/services/NotificacaoService
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-notificacaoservice
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     mongodb:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=notificacoes;Username=admin;Password=admin123
+  #     - ConnectionStrings__Redis=redis:6379
+  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #   ports:
+  #     - "5004:8080"
+  #   networks:
+  #     - ecommerce-network
+
+  # workeremail:
+  #   build:
+  #     context: ./src/services/WorkerEmail
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-workeremail
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Development
+  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #     - Smtp__Host=mailhog
+  #     - Smtp__Port=1025
+  #   networks:
+  #     - ecommerce-network
+
+  # frontend:
+  #   build:
+  #     context: ./src/frontend
+  #     dockerfile: Dockerfile
+  #   container_name: ecommerce-frontend
+  #   depends_on:
+  #     - pedidoservice
+  #     - estoqueservice
+  #   environment:
+  #     - API_URL=http://localhost:5001
+  #   ports:
+  #     - "4200:4200"
+  #   networks:
+  #     - ecommerce-network
+
+networks:
+  ecommerce-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:
+  zookeeper-data:
+  kafka-data:

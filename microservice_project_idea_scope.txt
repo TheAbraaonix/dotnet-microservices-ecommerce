@@ -1,0 +1,36 @@
+# Projeto 1 — E-commerce mini (melhor pra começar)
+
+👉 esse é o mais didático de todos
+
+## Serviços
+
+- PedidoService
+- EstoqueService
+- PagamentoService (fake)
+- NotificacaoService
+- WorkerEmail (Rabbit)
+
+## Eventos (Kafka ou Rabbit pub/sub)
+
+- PedidoCriado
+- PagamentoAprovado
+- EstoqueReservado
+
+## Rabbit (jobs)
+
+- SendEmail
+- SendInvoice
+
+## O que você aprende
+
+- event-driven
+- comunicação assíncrona
+- retry/DLQ
+- desacoplamento real
+- orquestração simples
+
+## Complexidade
+
+🟢 baixa
+
+escopo inicial gerado pelo chatgpt (apenas para dar um norte).
