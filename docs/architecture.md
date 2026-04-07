@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements an **event-driven microservices architecture** for an e-commerce platform. Services communicate through both **synchronous** (REST/gRPC) and **asynchronous** (RabbitMQ/Kafka) patterns.
+This project implements an **event-driven microservices architecture** for an e-commerce platform. Services communicate through **Kafka as the event backbone** for business events and **RabbitMQ for task queues** (notifications, background jobs).
 
 ## Service Architecture
 
@@ -25,86 +25,135 @@ This project implements an **event-driven microservices architecture** for an e-
 └──────────┬──────────┘                       │
            │                                  │
            │         ┌─────────────────────┐  │
-           │         │   RabbitMQ / Kafka  │  │
-           └────────►│    (Event Bus)      │◄─┘
+           │         │       Kafka         │  │
+           └────────►│   (Event Backbone)  │◄─┘
                      │                     │
            ┌────────►│                     │◄────────┐
            │         └──────────┬──────────┘         │
            │                    │                    │
 ┌──────────▼───────────────┐    │    ┌───────────────▼────────────────┐
 │  PagamentoService        │    │    │  NotificacaoService            │
-│  (Payment Processing)    │    │    │  (Notifications & Audit)       │
+│  (Payment Processing)    │    │    │  (Reads Kafka → Tasks)         │
 │  ┌────────────────────┐  │    │    │  ┌──────────────────┐          │
 │  │ PostgreSQL         │  │    │    │  │ PostgreSQL       │          │
 │  └────────────────────┘  │    │    │  │ Redis            │          │
 └──────────────────────────┘    │    │  └──────────────────┘          │
-                                │    └────────────────────────────────┘
-                       ┌────────▼────────┐
-                       │  WorkerEmail    │
-                       │  (Background)   │
+                                │    └──────────┬─────────────────────┘
+                       ┌────────▼────────┐       │
+                       │  WorkerEmail    │◄──────┘
+                       │  (RabbitMQ)     │  RabbitMQ tasks
                        └─────────────────┘
 ```
 
 ## Communication Patterns
 
-### 1. Synchronous Communication
+### 1. Kafka — Event Backbone (Business Events)
 
-**REST APIs** - Used for:
+**Pattern:** Event sourcing / event streaming
+
+**Topics:**
+| Topic | Partitions | Retention | Purpose |
+|-------|------------|-----------|---------|
+| `orders` | 3 | 7 days | Order lifecycle events |
+| `payments` | 3 | 7 days | Payment processing events |
+| `inventory` | 2 | 7 days | Stock reservation/release events |
+| `notifications` | 2 | 3 days | Notification dispatch events |
+
+**Used for:**
+- Order lifecycle events (`PedidoCriado`, `PedidoConfirmado`, `PedidoFalhou`)
+- Payment events (`PagamentoAprovado`, `PagamentoRecusado`)
+- Inventory events (`EstoqueReservado`, `EstoqueLiberado`)
+- Event replay and state reconstruction
+- Analytics and audit trails
+
+**Why Kafka:**
+- Events are stored → can replay from any point in time
+- Multiple consumers can read same topic independently
+- High throughput for analytics
+- Event sourcing: rebuild a service from scratch by replaying events
+
+### 2. RabbitMQ — Task Queues (Background Jobs)
+
+**Pattern:** Pub/Sub with direct queues
+
+**Exchanges & Queues:**
+| Exchange | Queue | Routing Key | Purpose |
+|----------|-------|-------------|---------|
+| `tasks` | `email.queue` | `send.email` | Email notifications |
+| `tasks` | `invoice.queue` | `send.invoice` | Invoice generation |
+| `tasks` | `sms.queue` | `send.sms` | SMS notifications |
+| `tasks.dlx` | `notifications.dlq` | - | Failed messages |
+
+**Used for:**
+- Sending emails (via `WorkerEmail`)
+- Generating invoices
+- Sending SMS notifications
+- Any "do this task once" operation
+
+**Why RabbitMQ:**
+- Built-in Dead Letter Queue (DLQ) for failed tasks
+- Message acknowledgment and redelivery
+- Retry logic with exponential backoff
+- Simpler for task queue patterns
+
+### 3. Synchronous Communication
+
+**REST APIs** — Used for:
 - Frontend → Service communication
-- Direct service-to-service queries (when needed)
+- Direct service queries (when needed)
 - Health checks and monitoring
 
-**gRPC** - Used for:
+**gRPC** — Used for:
 - Low-latency service-to-service calls
 - Internal service communication
-- High-throughput scenarios
-
-### 2. Asynchronous Communication
-
-**RabbitMQ** (Primary message broker):
-- **Pattern:** Pub/Sub with topic exchanges
-- **Use cases:** Task queues, event notifications, background jobs
-- **Features:** Dead Letter Queue (DLQ), message acknowledgment, retry logic
-
-**Kafka** (Event streaming platform):
-- **Pattern:** Event log / streaming
-- **Use cases:** Event sourcing, audit trails, analytics
-- **Features:** Event replay, partitioning, consumer groups
 
 ## Event Flow
 
-### Order Creation Flow
+### Order Creation Flow (Kafka)
 
 ```
 1. Client → POST /api/orders → PedidoService
 2. PedidoService → saves to PostgreSQL
-3. PedidoService → publishes "PedidoCriado" event → RabbitMQ
-4. EstoqueService consumes "PedidoCriado":
+3. PedidoService → publishes "PedidoCriado" to Kafka topic "orders"
+4. EstoqueService reads from "orders" topic:
    ├─ Reserves stock
-   └─ publishes "EstoqueReservado" event
-5. PagamentoService consumes "EstoqueReservado":
+   └─ publishes "EstoqueReservado" to "inventory" topic
+5. PagamentoService reads from "inventory" topic:
    ├─ Processes payment (mock)
-   └─ publishes "PagamentoAprovado" or "PagamentoRecusado"
-6. PedidoService consumes payment result:
-   ├─ If approved: confirms order → publishes "PedidoConfirmado"
-   └─ If refused: cancels order → publishes "PedidoFalhou"
-7. NotificacaoService consumes ALL events:
-   └─ Sends notifications to user
+   └─ publishes "PagamentoAprovado" or "PagamentoRecusado" to "payments" topic
+6. PedidoService reads from "payments" topic:
+   ├─ If approved: confirms order → publishes "PedidoConfirmado" to "orders"
+   └─ If refused: cancels order → publishes "PedidoFalhou" to "orders"
+7. NotificacaoService reads ALL Kafka topics:
+   └─ Determines notification type → dispatches to RabbitMQ
+```
+
+### Notification Flow (RabbitMQ)
+
+```
+1. NotificacaoService reads "PedidoConfirmado" from Kafka
+2. Determines user wants email notification
+3. Publishes to RabbitMQ:
+   └─ exchange "tasks" → routing key "send.email" → queue "email.queue"
+4. WorkerEmail consumes from "email.queue":
+   ├─ Sends email
+   ├─ On failure: retries 3 times with exponential backoff
+   └─ Still fails? → moves to DLQ for manual inspection
 ```
 
 ### Saga Pattern (Distributed Transaction)
 
-This project implements the **Saga Pattern** using **choreography** (event-based coordination):
+This project implements the **Saga Pattern** using **event-driven choreography** via Kafka:
 
 ```
 Normal Flow:
   PedidoCriado → EstoqueReservado → PagamentoAprovado → PedidoConfirmado
 
 Compensation Flow (Payment Failed):
-  PagamentoRecusado → EstoqueLiberaReserva → PedidoFalhou
+  PagamentoRecusado → EstoqueLiberado → PedidoFalhou
 ```
 
-**Key Principle:** Each service publishes events. Other services react to those events. There's no central coordinator.
+**Key Principle:** Each service publishes events to Kafka. Other services consume from Kafka topics. There's no central coordinator.
 
 ## Database Architecture
 
@@ -130,9 +179,9 @@ Prevents cascading failures when a service is down:
 Closed → (failures exceed threshold) → Open → (timeout) → Half-Open → (test succeeds) → Closed
 ```
 
-### 2. Retry with Exponential Backoff
+### 2. Retry with Exponential Backoff (RabbitMQ)
 
-Handles transient failures:
+Handles transient failures in task queues:
 
 ```
 Attempt 1 → wait 1s
@@ -146,36 +195,48 @@ Give up → send to DLQ
 Messages that fail repeatedly are moved to a DLQ for manual inspection:
 
 ```
-Main Queue → (3 retries failed) → DLX Exchange → DLQ
+email.queue → (3 retries failed) → tasks.dlx → notifications.dlq
 ```
 
 ### 4. Idempotency
 
-Prevents duplicate processing of the same message:
+Prevents duplicate processing of the same Kafka event:
 
 ```json
 {
   "eventId": "unique-guid",
   "eventType": "PedidoCriado",
+  "timestamp": "2026-04-06T21:00:00Z",
   "data": { ... }
 }
 ```
 
 Services track processed event IDs to avoid duplicates.
 
-## Message Broker Configuration
+### 5. Kafka Consumer Offset Management
 
-### RabbitMQ Setup
+Each service manages its own offset:
+- Track position in topic
+- Can rewind to replay events
+- Independent of other consumers
 
-- **Exchange:** `ecommerce.events` (topic exchange)
-- **Queues:** One per service + DLQ
-- **Routing Keys:** `pedido.*`, `estoque.*`, `pagamento.*`, `email.*`
+## Message Broker Comparison
 
-### Kafka Setup
+### When to Use Kafka
 
-- **Topics:** Orders, Payments, Inventory, Notifications
-- **Consumer Groups:** One per service
-- **Partitioning:** By order/customer ID
+- Event sourcing and event log
+- Replay events from a specific time
+- Multiple independent consumers
+- Analytics and audit trails
+- High throughput requirements
+
+### When to Use RabbitMQ
+
+- Task queues ("do this once")
+- Need acknowledgment and retry
+- Dead Letter Queue for failures
+- Complex routing rules
+- Request/response patterns
 
 ## Security Considerations
 
@@ -188,6 +249,8 @@ Services track processed event IDs to avoid duplicates.
 
 - **Health Checks:** `/health` endpoint on each service
 - **Structured Logging:** Serilog with console and file sinks
+- **Kafka UI:** http://localhost:8090 (view topics, consumers, offsets)
+- **RabbitMQ UI:** http://localhost:15672 (view queues, messages, DLQ)
 - **Metrics:** Prometheus format (future enhancement)
 - **Tracing:** Distributed tracing (future enhancement)
 
@@ -199,3 +262,4 @@ Services track processed event IDs to avoid duplicates.
 - [ ] CI/CD pipelines (GitHub Actions)
 - [ ] Load testing and performance optimization
 - [ ] Real email notifications (SendGrid/AWS SES)
+- [ ] SMS worker service

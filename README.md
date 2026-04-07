@@ -17,20 +17,21 @@ A portfolio-ready e-commerce platform built with **event-driven microservices ar
 └──────────┬───────────────┘          └──────────┬────────────────────┘
            │                                     │
            │         ┌─────────────────┐         │
-           │         │  RabbitMQ /     │         │
-           └────────►│     Kafka       │◄────────┘
-                     │  (Event Bus)    │
+           │         │     Kafka       │         │
+           └────────►│  (Event Log)    │◄────────┘
+                     │                 │
            ┌────────►│                 │◄────────┐
            │         └────────┬────────┘         │
            │                  │                  │
 ┌──────────▼───────────────┐  │  ┌───────────────▼───────────────┐
 │  PagamentoService        │  │  │  NotificacaoService           │
-│  (Payment - Mock)        │  │  │  (Notifications)              │
+│  (Payment - Mock)        │  │  │  (Reads Kafka → sends tasks)  │
 │  PostgreSQL              │  │  │  PostgreSQL + Redis           │
-└──────────────────────────┘  │  └───────────────────────────────┘
-                              │
-                     ┌────────▼────────┐
-                     │  WorkerEmail    │
+└──────────────────────────┘  │  └──────────┬────────────────────┘
+                              │             │
+                              │             │ RabbitMQ tasks
+                     ┌────────▼────────┐    │
+                     │  WorkerEmail    │◄───┘
                      │  (Background)   │
                      └─────────────────┘
 ```
@@ -42,14 +43,15 @@ A portfolio-ready e-commerce platform built with **event-driven microservices ar
 | **PedidoService** | Order creation and management | PostgreSQL + MongoDB | REST + gRPC |
 | **EstoqueService** | Inventory tracking and reservation | PostgreSQL | REST + gRPC |
 | **PagamentoService** | Mock payment processing | PostgreSQL | REST + gRPC |
-| **NotificacaoService** | Event notifications and audit | PostgreSQL + Redis | REST |
-| **WorkerEmail** | Background email processing | - | RabbitMQ Consumer |
+| **NotificacaoService** | Reads Kafka events, dispatches tasks to RabbitMQ | PostgreSQL + Redis | REST |
+| **WorkerEmail** | Background email/SMS processing (consumes RabbitMQ) | - | RabbitMQ Consumer |
 
 ### Technology Stack
 
-- **Backend:** .NET 8+ (ASP.NET Core)
+- **Backend:** .NET 9 (ASP.NET Core)
 - **Frontend:** Angular 20+
-- **Message Brokers:** RabbitMQ (pub/sub), Kafka (event streaming)
+- **Event Backbone:** Kafka (order flow, payments, inventory events)
+- **Task Queues:** RabbitMQ (email, SMS, invoices, notifications)
 - **Databases:** PostgreSQL, MongoDB, Redis
 - **Containerization:** Docker, Docker Compose, Kubernetes
 - **Resilience:** Polly (circuit breaker, retry)
@@ -121,21 +123,30 @@ microservices/
 
 ## 🔄 Event Flow
 
-### Order Creation Flow
+### Order Creation Flow (via Kafka)
 
 1. **Client** creates order via Angular → `PedidoService`
-2. **PedidoService** publishes `PedidoCriado` event
-3. **EstoqueService** consumes event → reserves stock → publishes `EstoqueReservado`
-4. **PagamentoService** consumes `EstoqueReservado` → processes payment → publishes `PagamentoAprovado`
-5. **PedidoService** consumes `PagamentoAprovado` → confirms order → publishes `PedidoConfirmado`
-6. **NotificacaoService** consumes all events → sends notifications
+2. **PedidoService** saves order → publishes `PedidoCriado` to Kafka topic `orders`
+3. **EstoqueService** reads from `orders` topic → reserves stock → publishes `EstoqueReservado` to `inventory` topic
+4. **PagamentoService** reads from `inventory` topic → processes payment → publishes `PagamentoAprovado` to `payments` topic
+5. **PedidoService** reads from `payments` topic → confirms order → publishes `PedidoConfirmado` to `orders` topic
+6. **NotificacaoService** reads ALL Kafka topics → dispatches tasks to RabbitMQ queues
 
 ### Saga Pattern (Compensation)
 
 If payment fails:
-1. **PagamentoService** publishes `PagamentoRecusado`
-2. **EstoqueService** consumes event → releases reserved stock
-3. **PedidoService** marks order as failed → publishes `PedidoFalhou`
+1. **PagamentoService** publishes `PagamentoRecusado` to `payments` topic
+2. **EstoqueService** reads event → releases reserved stock → publishes `EstoqueLiberado`
+3. **PedidoService** reads event → marks order as failed → publishes `PedidoFalhou`
+
+### Notification Flow (via RabbitMQ)
+
+1. **NotificacaoService** reads Kafka events
+2. Determines user notification needed (email, SMS)
+3. Publishes task to RabbitMQ:
+   - `send.email` → `email.queue` → `WorkerEmail` consumes
+   - `send.sms` → `sms.queue` → `WorkerSMS` consumes (future)
+4. Workers process tasks with retry/DLQ handling
 
 ## 🛠️ Development
 
@@ -163,7 +174,8 @@ docker build -t pedidoservice src/services/PedidoService
 
 - Health checks: `http://localhost:{port}/health`
 - Swagger UI: `http://localhost:{port}/swagger`
-- RabbitMQ Management: `http://localhost:15672` (guest/guest)
+- RabbitMQ Management: `http://localhost:15672` (guest/guest) — task queues, DLQ
+- Kafka UI: `http://localhost:8090` — event topics, consumer offsets
 
 ## 🎓 Learning Goals
 

@@ -37,15 +37,15 @@ docker-compose -f infra/docker/docker-compose.yml up -d
 | PostgreSQL | 5432 | Primary relational database |
 | MongoDB | 27017 | Document database (order history) |
 | Redis | 6379 | Caching layer |
-| RabbitMQ | 5672, 15672 | Message broker (AMQP) |
-| Kafka | 9092, 29092 | Event streaming |
+| Kafka | 9092, 29092 | **Event backbone** (order flow, payments, inventory) |
+| RabbitMQ | 5672, 15672 | **Task queues** (email, SMS, invoices) |
 | Kafka UI | 8090 | Kafka web interface |
 | Zookeeper | 2181 | Kafka dependency |
 
 **Access Management UIs:**
 
-- **RabbitMQ:** http://localhost:15672 (guest/guest)
-- **Kafka UI:** http://localhost:8090
+- **RabbitMQ:** http://localhost:15672 (guest/guest) — view task queues and DLQ
+- **Kafka UI:** http://localhost:8090 — view event topics and consumer offsets
 
 ### 3. Verify Infrastructure
 

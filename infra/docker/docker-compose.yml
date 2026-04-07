@@ -64,27 +64,7 @@ services:
   # MESSAGE BROKERS
   # ──────────────────────────────────────────────
 
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    container_name: ecommerce-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    ports:
-      - "5672:5672"    # AMQP port
-      - "15672:15672"  # Management UI
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
-    networks:
-      - ecommerce-network
-    healthcheck:
-      test: rabbitmq-diagnostics -q ping
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # Kafka = Main event backbone (order flow, payments, inventory)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: ecommerce-zookeeper
@@ -116,10 +96,33 @@ services:
       - "29092:29092"
     volumes:
       - kafka-data:/var/lib/kafka/data
+      - ./kafka-init:/kafka-init
     networks:
       - ecommerce-network
     healthcheck:
       test: kafka-broker-api-versions --bootstrap-server localhost:9092
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ = Task queues (email, SMS, invoices, notifications)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
       interval: 10s
       timeout: 5s
       retries: 5
@@ -150,12 +153,12 @@ services:
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
-  #     rabbitmq:
+  #     kafka:
   #       condition: service_healthy
   #   environment:
   #     - ASPNETCORE_ENVIRONMENT=Development
   #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=pedidos;Username=admin;Password=admin123
-  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #     - Kafka__BootstrapServers=kafka:9092
   #   ports:
   #     - "5001:8080"
   #   networks:
@@ -169,12 +172,12 @@ services:
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
-  #     rabbitmq:
+  #     kafka:
   #       condition: service_healthy
   #   environment:
   #     - ASPNETCORE_ENVIRONMENT=Development
   #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=estoque;Username=admin;Password=admin123
-  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #     - Kafka__BootstrapServers=kafka:9092
   #   ports:
   #     - "5002:8080"
   #   networks:
@@ -188,12 +191,12 @@ services:
   #   depends_on:
   #     postgres:
   #       condition: service_healthy
-  #     rabbitmq:
+  #     kafka:
   #       condition: service_healthy
   #   environment:
   #     - ASPNETCORE_ENVIRONMENT=Development
   #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=pagamentos;Username=admin;Password=admin123
-  #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
+  #     - Kafka__BootstrapServers=kafka:9092
   #   ports:
   #     - "5003:8080"
   #   networks:
@@ -211,12 +214,15 @@ services:
   #       condition: service_healthy
   #     redis:
   #       condition: service_healthy
+  #     kafka:
+  #       condition: service_healthy
   #     rabbitmq:
   #       condition: service_healthy
   #   environment:
   #     - ASPNETCORE_ENVIRONMENT=Development
   #     - ConnectionStrings__Default=Host=postgres;Port=5432;Database=notificacoes;Username=admin;Password=admin123
   #     - ConnectionStrings__Redis=redis:6379
+  #     - Kafka__BootstrapServers=kafka:9092
   #     - RabbitMQ__Host=rabbitmq;Port=5672;Username=guest;Password=guest
   #   ports:
   #     - "5004:8080"

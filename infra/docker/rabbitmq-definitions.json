@@ -1,68 +1,84 @@
 {
+  "rabbit_version": "3.12.0",
+  "exports": [
+    {
+      "exporter": "definitions",
+      "version": 1
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "users": [
+    {
+      "name": "guest",
+      "password_hash": "BMxNjHBNaUy7T7dM4z8YkqH6f7kM3p1g2R5tJ8vL0wX9zA4C",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": ["administrator"]
+    }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
   "exchanges": [
     {
-      "name": "ecommerce.events",
-      "type": "topic",
+      "name": "tasks",
+      "type": "direct",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
+      "internal": false,
       "arguments": {}
     },
     {
-      "name": "ecommerce.dlx",
+      "name": "tasks.dlx",
       "type": "fanout",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
+      "internal": false,
       "arguments": {}
     }
   ],
   "queues": [
     {
-      "name": "pedidoservice.queue",
+      "name": "email.queue",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-dead-letter-exchange": "ecommerce.dlx",
-        "x-dead-letter-routing-key": ""
+        "x-dead-letter-exchange": "tasks.dlx"
       }
     },
     {
-      "name": "estoqueservice.queue",
+      "name": "invoice.queue",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-dead-letter-exchange": "ecommerce.dlx",
-        "x-dead-letter-routing-key": ""
+        "x-dead-letter-exchange": "tasks.dlx"
       }
     },
     {
-      "name": "pagamentosservice.queue",
+      "name": "sms.queue",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {
-        "x-dead-letter-exchange": "ecommerce.dlx",
-        "x-dead-letter-routing-key": ""
+        "x-dead-letter-exchange": "tasks.dlx"
       }
     },
     {
-      "name": "notificacaoservice.queue",
-      "durable": true,
-      "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "ecommerce.dlx",
-        "x-dead-letter-routing-key": ""
-      }
-    },
-    {
-      "name": "workeremail.queue",
-      "durable": true,
-      "auto_delete": false,
-      "arguments": {
-        "x-dead-letter-exchange": "ecommerce.dlx",
-        "x-dead-letter-routing-key": ""
-      }
-    },
-    {
-      "name": "ecommerce.dlq",
+      "name": "notifications.dlq",
+      "vhost": "/",
       "durable": true,
       "auto_delete": false,
       "arguments": {}
@@ -70,38 +86,34 @@
   ],
   "bindings": [
     {
-      "source": "ecommerce.events",
-      "destination": "pedidoservice.queue",
-      "routing_key": "pedido.*",
+      "source": "tasks",
+      "vhost": "/",
+      "destination": "email.queue",
+      "destination_type": "queue",
+      "routing_key": "send.email",
       "arguments": {}
     },
     {
-      "source": "ecommerce.events",
-      "destination": "estoqueservice.queue",
-      "routing_key": "estoque.*",
+      "source": "tasks",
+      "vhost": "/",
+      "destination": "invoice.queue",
+      "destination_type": "queue",
+      "routing_key": "send.invoice",
       "arguments": {}
     },
     {
-      "source": "ecommerce.events",
-      "destination": "pagamentosservice.queue",
-      "routing_key": "pagamento.*",
+      "source": "tasks",
+      "vhost": "/",
+      "destination": "sms.queue",
+      "destination_type": "queue",
+      "routing_key": "send.sms",
       "arguments": {}
     },
     {
-      "source": "ecommerce.events",
-      "destination": "notificacaoservice.queue",
-      "routing_key": "#",
-      "arguments": {}
-    },
-    {
-      "source": "ecommerce.events",
-      "destination": "workeremail.queue",
-      "routing_key": "email.*",
-      "arguments": {}
-    },
-    {
-      "source": "ecommerce.dlx",
-      "destination": "ecommerce.dlq",
+      "source": "tasks.dlx",
+      "vhost": "/",
+      "destination": "notifications.dlq",
+      "destination_type": "queue",
       "routing_key": "",
       "arguments": {}
     }

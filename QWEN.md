@@ -16,7 +16,7 @@ Event-driven microservices with both synchronous (REST/gRPC) and asynchronous (R
 |-------|-------------|
 | **Backend** | .NET 8+ (ASP.NET Core) |
 | **Frontend** | Angular 20+ (TypeScript) |
-| **Message Brokers** | RabbitMQ (primary), Kafka (secondary/event streaming) |
+| **Message Brokers** | Kafka (event backbone), RabbitMQ (task queues) |
 | **Databases** | PostgreSQL (relational), MongoDB (document store), Redis (caching) |
 | **Containerization** | Docker, Docker Compose, Kubernetes |
 | **Monitoring** | Serilog (logging), Prometheus (metrics) |
@@ -56,11 +56,12 @@ Event-driven microservices with both synchronous (REST/gRPC) and asynchronous (R
    - Implements: Dead Letter Queue (DLQ) pattern
 
 ### Key Patterns
-- **Saga Pattern**: Distributed transaction coordination (choreography via events)
-- **Retry/DLQ**: Graceful message failure handling
+- **Saga Pattern**: Distributed transaction coordination (choreography via Kafka events)
+- **Retry/DLQ**: Graceful message failure handling (RabbitMQ task queues)
 - **Idempotency**: Prevent duplicate processing
 - **Circuit Breaker**: Resilience with Polly
 - **Timeout Handling**: Service call timeouts
+- **Event Replay**: Kafka offset management for state reconstruction
 
 ## Project Phases
 
@@ -155,4 +156,6 @@ The project is currently in the planning stage with detailed documentation. No c
 - Timeline is flexible: ~16 weeks suggested, focus on understanding over speed
 - Designed as a portfolio piece showcasing growth from junior → mid-level engineer
 - Both RabbitMQ and Kafka included to learn when to use each message broker
+- **Kafka**: Event backbone for business events (order flow, payments, inventory)
+- **RabbitMQ**: Task queues for background jobs (email, SMS, invoices)
 - E-commerce scope chosen for being relatable and demonstrating real-world patterns
