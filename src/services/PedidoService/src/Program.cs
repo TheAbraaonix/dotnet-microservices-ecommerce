@@ -1,3 +1,4 @@
+using PedidoService.Middleware;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,13 +7,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((context, configuration) =>
     configuration.ReadFrom.Configuration(context.Configuration));
 
-// Add services to the container
+// Register all services via extension method
+builder.Services.AddDependencies(builder.Configuration);
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-// Health checks
-builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -22,6 +22,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Global exception handler (must be before controllers)
+app.UseMiddleware<GlobalExceptionHandler>();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();

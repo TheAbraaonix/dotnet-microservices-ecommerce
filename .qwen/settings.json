@@ -6,7 +6,10 @@
       "Bash(docker ps *)",
       "Bash(docker-compose *)",
       "Bash(docker logs *)",
-      "Bash(timeout *)"
+      "Bash(timeout *)",
+      "Bash(dotnet *)",
+      "Bash(start *)",
+      "Bash(curl *)"
     ]
   },
   "$version": 3
