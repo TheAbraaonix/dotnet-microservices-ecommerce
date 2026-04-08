@@ -48,7 +48,7 @@ A portfolio-ready e-commerce platform built with **event-driven microservices ar
 
 ### Technology Stack
 
-- **Backend:** .NET 9 (ASP.NET Core)
+- **Backend:** .NET 8 LTS (ASP.NET Core)
 - **Frontend:** Angular 20+
 - **Event Backbone:** Kafka (order flow, payments, inventory events)
 - **Task Queues:** RabbitMQ (email, SMS, invoices, notifications)

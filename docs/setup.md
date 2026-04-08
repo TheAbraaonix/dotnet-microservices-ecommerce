@@ -8,7 +8,7 @@ Before you begin, ensure you have the following installed:
 
 | Software | Version | Download Link |
 |----------|---------|---------------|
-| .NET SDK | 9.0+ | [Download](https://dotnet.microsoft.com/download) |
+| .NET SDK | 8.0+ | [Download](https://dotnet.microsoft.com/download) |
 | Docker Desktop | Latest | [Download](https://www.docker.com/products/docker-desktop/) |
 | Node.js | 20+ | [Download](https://nodejs.org/) |
 | Git | Latest | [Download](https://git-scm.com/) |

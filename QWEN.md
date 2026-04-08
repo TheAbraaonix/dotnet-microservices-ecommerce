@@ -14,7 +14,7 @@ Event-driven microservices with both synchronous (REST/gRPC) and asynchronous (R
 
 | Layer | Technologies |
 |-------|-------------|
-| **Backend** | .NET 8+ (ASP.NET Core) |
+| **Backend** | .NET 8 LTS (ASP.NET Core) |
 | **Frontend** | Angular 20+ (TypeScript) |
 | **Message Brokers** | Kafka (event backbone), RabbitMQ (task queues) |
 | **Databases** | PostgreSQL (relational), MongoDB (document store), Redis (caching) |

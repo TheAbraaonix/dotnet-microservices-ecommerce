@@ -101,31 +101,32 @@ Use **PostgreSQL** as the primary database for all services that need relational
 
 ---
 
-## ADR-004: .NET 9 for Backend
+## ADR-004: .NET 8 LTS for Backend
 
 **Status:** Accepted  
 **Date:** 2026-04-06
 
 ### Context
 
-Choose the backend framework and version.
+We needed to choose the backend framework and version.
 
 ### Decision
 
-Use **.NET 9** (latest stable) for all microservices.
+Use **.NET 8 LTS** (long-term support) for all microservices.
 
 ### Consequences
 
 **Pros:**
-- Latest performance improvements
-- Built-in OpenAPI support
-- Minimal APIs option
-- Strong ecosystem (MassTransit, Polly, Serilog)
+- LTS support until November 2026
+- Excellent performance and built-in OpenAPI support
+- Strong ecosystem (MassTransit, Polly, Serilog, Confluent.Kafka)
 - Cross-platform
+- More cloud provider support than .NET 9
+- Better stability for production deployments
 
 **Cons:**
-- May not be available on all cloud providers yet
-- Some enterprise environments still on .NET 6/8
+- Slightly fewer new features than .NET 9
+- Some newer APIs may not be available
 
 ---
 
